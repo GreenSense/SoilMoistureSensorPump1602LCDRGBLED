@@ -60,7 +60,7 @@ void setup()
   // values from EEPROM in the following lines
   //setWetReading(wetReading);
   //setDryReading(dryReading);
-  
+
   dryReading = getDryReading();
   wetReading = getWetReading();
 
@@ -76,6 +76,7 @@ void setup()
 
   lcd.backlight();
 
+  // If the interval is less than 2 seconds turn the sensor on and leave it on (otherwise it will be turned on just before it's needed)
   if (interval <= 2000)
   {
     sensorOn();
@@ -213,13 +214,13 @@ void takeReading()
 
     irrigateIfNeeded();
 
-    Serial.print("Wet raw value: ");
-    Serial.print(wetReading);
-    Serial.print("   ");
+    //Serial.print("Wet raw value: ");
+    //Serial.print(wetReading);
+    //Serial.print("   ");
 
-    Serial.print("Dry raw value: ");
-    Serial.print(dryReading);
-    Serial.println();
+    //Serial.print("Dry raw value: ");
+    //Serial.print(dryReading);
+    //Serial.println();
 
 
   }
