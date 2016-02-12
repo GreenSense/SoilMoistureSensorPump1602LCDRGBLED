@@ -25,8 +25,10 @@ long readingInterval = second;
 int moistureLevel = 0;
 int moistureLevelRaw = 0;
 
-int wetReading = 250;
-int dryReading = 0;
+int wetReading = 0;
+int dryReading = 150;
+//int dryReading = 250;
+//int dryReading = 1023;
 
 int dryReadingAddress = 0;
 int wetReadingAddress = 1;
@@ -39,7 +41,7 @@ int threshold = 50;
 int pumpOnDuration = 1000;
 int pumpWaitDuration = 60000;
 
-int interval = 1000;
+int interval = 2000;
 
 long lastPumpTime = 0;
 
@@ -54,21 +56,33 @@ void setup()
   pinMode(pumpPin, OUTPUT);
   pinMode(sensorPowerPin, OUTPUT);
 
+  // Uncomment these lines to use the values above. Otherwise they will be replaced by
+  // values from EEPROM in the following lines
+  //setWetReading(wetReading);
+  //setDryReading(dryReading);
+  
   dryReading = getDryReading();
   wetReading = getWetReading();
 
   Serial.println("Starting soil moisture sensor");
 
-  Serial.print("Lowest reading: ");
+  Serial.print("Dry reading: ");
   Serial.println(dryReading);
-  Serial.print("Highest reading: ");
+  Serial.print("Wet reading: ");
   Serial.println(wetReading);
 
-setWetReading(wetReading);
-setDryReading(dryReading);
+
   lcd.init();
 
   lcd.backlight();
+
+  if (interval <= 2000)
+  {
+    sensorOn();
+
+    delay(2000);
+  }
+
 }
 
 void loop()
@@ -91,7 +105,7 @@ void displayReading()
   lcd.print(moistureLevel);
   lcd.print("%");
   lcd.setCursor(0, 1);
-  lcd.print("Threshold: ");
+  lcd.print("Irrigate at: ");
   lcd.print(threshold);
   lcd.print("%");
 }
@@ -105,15 +119,15 @@ void checkCommand()
 
     switch (command)
     {
-      case 'L':
+      case 'D':
         lastReadingTime = 0;
         takeReading();
-        setdryReading(moistureLevelRaw);
+        setDryReading(moistureLevelRaw);
         break;
-      case 'H':
+      case 'W':
         lastReadingTime = 0;
         takeReading();
-        setwetReading(moistureLevelRaw);
+        setWetReading(moistureLevelRaw);
         break;
     }
   }
@@ -196,18 +210,18 @@ void takeReading()
     setRgbLed();
 
     displayReading();
-    
+
     irrigateIfNeeded();
 
     Serial.print("Wet raw value: ");
     Serial.print(wetReading);
     Serial.print("   ");
-    
+
     Serial.print("Dry raw value: ");
     Serial.print(dryReading);
     Serial.println();
-    
-    
+
+
   }
   else
   {
@@ -231,25 +245,25 @@ void setRgbLed()
 
 void irrigateIfNeeded()
 {
-  if (moistureLevel < threshold
-    && (lastPumpTime + pumpWaitDuration < millis()
-      || lastPumpTime == 0))
+  if (moistureLevel <= threshold
+      && (lastPumpTime + pumpWaitDuration < millis()
+          || lastPumpTime == 0))
   {
-      Serial.println("Irrigating");
-      
-      digitalWrite(pumpPin, HIGH);
+    Serial.println("Irrigating");
 
-      Serial.println("Pump is on");
-  
-      delay(pumpOnDuration);
-  
-      digitalWrite(pumpPin, LOW);
-      
-      Serial.println("Pump is off");
+    digitalWrite(pumpPin, HIGH);
 
-      lastPumpTime = millis();
+    Serial.println("Pump is on");
 
-    }
+    delay(pumpOnDuration);
+
+    digitalWrite(pumpPin, LOW);
+
+    Serial.println("Pump is off");
+
+    lastPumpTime = millis();
+
+  }
 }
 
 void outputTimeRemaining()
@@ -277,20 +291,20 @@ void sensorOff()
   digitalWrite(sensorPowerPin, LOW);
 }
 
-void setdryReading(int reading)
+void setDryReading(int reading)
 {
   dryReading = reading;
-  
+
   Serial.print("Setting lowest reading: ");
   Serial.println(reading);
 
   EEPROM.write(dryReadingAddress, reading / 4); // Must divide by 4 to make it fit in eeprom
 }
 
-void setwetReading(int reading)
+void setWetReading(int reading)
 {
   wetReading = reading;
-  
+
   Serial.print("Setting highest reading: ");
   Serial.println(reading);
 
@@ -308,7 +322,7 @@ int getDryReading()
 }
 
 int getWetReading()
-{  
+{
   int value = EEPROM.read(wetReadingAddress);
 
   if (value == 255)
