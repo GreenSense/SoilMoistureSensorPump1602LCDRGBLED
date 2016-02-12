@@ -165,7 +165,7 @@ void takeReading()
 
     lastReadingTime = millis();
 
-    // If the interval is less than 2 seconds the sensor doesn't need to be turned off
+    // If the interval is less than 2 seconds the sensor is already be on. No need to turn it on again.
     if (interval > 2000)
     {
       sensorOn();
