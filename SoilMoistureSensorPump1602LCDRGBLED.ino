@@ -13,9 +13,12 @@ long lastReadingTime = 0;
 long readingInterval = second;
 
 #define moisturePin 0
-#define sensorPowerPin 6
+#define sensorPowerPin 8
 #define ledPin 13
-#define buttonPin 4
+#define button1Pin 7
+#define button2Pin 6
+#define button3Pin 5
+#define button4Pin 4
 #define pumpPin 3
 
 #define redPin 10
@@ -34,7 +37,7 @@ int dryReadingAddress = 0;
 int wetReadingAddress = 1;
 
 long lastDebounceTime = 0;
-long debounceDelay = 50;
+long debounceDelay = 200;
 
 int threshold = 50;
 
@@ -44,6 +47,13 @@ int pumpWaitDuration = 60000;
 int interval = 2000;
 
 long lastPumpTime = 0;
+
+bool screenIsOn = true;
+bool sensorIsOn = true;
+long sensorOnTime = 0;
+
+long lastDisplayTime = 0;
+long displayRefreshInterval = 1000;
 
 void setup()
 {
@@ -81,7 +91,7 @@ void setup()
   {
     sensorOn();
 
-    delay(2000);
+    //delay(2000);
   }
 
 }
@@ -95,20 +105,25 @@ void loop()
   takeReading();
 
 
-  delay(interval);
+  delay(100);
 }
 
 void displayReading()
 {
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Moisture: ");
-  lcd.print(moistureLevel);
-  lcd.print("%");
-  lcd.setCursor(0, 1);
-  lcd.print("Irrigate at: ");
-  lcd.print(threshold);
-  lcd.print("%");
+  if (millis() > lastDisplayTime + displayRefreshInterval)
+  {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Moisture: ");
+    lcd.print(cstr(moistureLevel));
+    lcd.print("%");
+    lcd.setCursor(0, 1);
+    lcd.print("Irrigate at: ");
+    lcd.print(threshold);
+    lcd.print("%");
+
+    lastDisplayTime = millis();
+  }
 }
 void checkCommand()
 {
@@ -136,24 +151,91 @@ void checkCommand()
 
 void checkButton()
 {
-  int reading = digitalRead(buttonPin);
 
   if ((millis() - lastDebounceTime) > debounceDelay) {
-    if (reading == HIGH) {
+
+    int reading1 = digitalRead(button1Pin);
+    int reading2 = digitalRead(button2Pin);
+    int reading3 = digitalRead(button3Pin);
+    int reading4 = digitalRead(button4Pin);
+
+    if (reading1 == HIGH)
+      toggleScreen();
+
+    if (reading2 == HIGH)
+      Serial.println("Button 2");
+
+    if (reading3 == HIGH)
+    {
+      calibrateWet();
+    }
+
+    if (reading4 == HIGH)
+    {
+      calibrateDry();
+    }
+
+
+
+    if (reading1 == HIGH
+        || reading2 == HIGH
+        || reading3 == HIGH
+        || reading4 == HIGH) {
 
       lastDebounceTime = millis();
 
       Serial.println("Button pressed");
 
-      digitalWrite(ledPin, HIGH);
+      //digitalWrite(ledPin, HIGH);
 
       // Reset the last reading time to force another reading
       lastReadingTime = 0;
-      takeReading();
 
-      digitalWrite(ledPin, LOW);
+      //digitalWrite(ledPin, LOW);
     }
   }
+}
+
+void calibrateWet()
+{
+  Serial.println("Calibrating wet soil");
+
+  //lcd.clear();
+ // lcd.setCursor(0, 0);
+  //lcd.print("Confirm calibrate wet... ");
+  //lcd.setCursor(0, 1);
+ // lcd.print("Press button 1");
+
+  //if ((millis() - lastDebounceTime) > debounceDelay) {
+
+   // int reading1 = digitalRead(button1Pin);
+    lastReadingTime = 0; // Force another reading
+    takeReading();
+    setWetReading(moistureLevelRaw);
+
+  //  Serial.println("Confirmed");
+  //}
+}
+
+void calibrateDry()
+{
+  Serial.println("Calibrating dry soil");
+  
+  lastReadingTime = 0; // Force another reading
+  takeReading();
+  setDryReading(moistureLevelRaw);
+}
+
+void toggleScreen()
+{
+
+  screenIsOn = !screenIsOn;
+
+  Serial.println("Toggle screen");
+  if (screenIsOn)
+    lcd.backlight();
+  else
+    lcd.noBacklight();
 }
 
 void takeReading()
@@ -161,68 +243,78 @@ void takeReading()
   if (lastReadingTime + readingInterval < millis()
       || lastReadingTime == 0)
   {
-    //Serial.println("Taking reading");
 
-    lastReadingTime = millis();
+    //Serial.println("Preparing to take reading");
 
-    // If the interval is less than 2 seconds the sensor is already be on. No need to turn it on again.
-    if (interval > 2000)
+    if (!sensorIsOn && interval < 2000)
     {
       sensorOn();
-
-      delay(2000);
     }
-
-    int readingSum  = 0;
-    int totalReadings = 10;
-
-    for (int i = 0; i < totalReadings; i++)
+    else if (sensorIsOn && sensorOnTime + 2000 < millis()
+             || interval < 2000)
     {
-      int reading = analogRead(moisturePin);
+      Serial.println("Taking reading");
 
-      readingSum += reading;
+      lastReadingTime = millis();
+
+      // If the interval is less than 2 seconds the sensor is already be on. No need to turn it on again.
+      /* if (interval > 2000)
+        {
+         sensorOn();
+
+         delay(2000);
+        }*/
+
+      int readingSum  = 0;
+      int totalReadings = 10;
+
+      for (int i = 0; i < totalReadings; i++)
+      {
+        int reading = analogRead(moisturePin);
+
+        readingSum += reading;
+      }
+
+      int averageReading = readingSum / totalReadings;
+
+      moistureLevelRaw = averageReading;
+
+      Serial.print("Average raw reading: ");
+      Serial.println(averageReading);
+
+      moistureLevel = map(averageReading, dryReading, wetReading, 0, 100);
+
+      if (moistureLevel < 0)
+        moistureLevel = 0;
+
+      if (moistureLevel > 100)
+        moistureLevel = 100;
+
+      Serial.print("Moisture level: ");
+      Serial.print(moistureLevel);
+      Serial.println("%");
+
+      // If the interval is less than 2 seconds then don't turn the sensor off
+      if (interval > 2000)
+      {
+        sensorOff();
+      }
+
+      setRgbLed();
+
+      displayReading();
+
+      irrigateIfNeeded();
+
+      //Serial.print("Wet raw value: ");
+      //Serial.print(wetReading);
+      //Serial.print("   ");
+
+      //Serial.print("Dry raw value: ");
+      //Serial.print(dryReading);
+      //Serial.println();
+
     }
-
-    int averageReading = readingSum / totalReadings;
-
-    moistureLevelRaw = averageReading;
-
-    Serial.print("Average raw reading: ");
-    Serial.println(averageReading);
-
-    moistureLevel = map(averageReading, dryReading, wetReading, 0, 100);
-
-    if (moistureLevel < 0)
-      moistureLevel = 0;
-
-    if (moistureLevel > 100)
-      moistureLevel = 100;
-
-    Serial.print("Moisture level: ");
-    Serial.print(moistureLevel);
-    Serial.println("%");
-
-    // If the interval is less than 2 seconds then don't turn the sensor off
-    if (interval > 2000)
-    {
-      sensorOff();
-    }
-
-    setRgbLed();
-
-    displayReading();
-
-    irrigateIfNeeded();
-
-    //Serial.print("Wet raw value: ");
-    //Serial.print(wetReading);
-    //Serial.print("   ");
-
-    //Serial.print("Dry raw value: ");
-    //Serial.print(dryReading);
-    //Serial.println();
-
-
   }
   else
   {
@@ -280,16 +372,22 @@ void outputTimeRemaining()
 
 void sensorOn()
 {
-  //Serial.println("Turning sensor on");
+  Serial.println("Turning sensor on");
 
   digitalWrite(sensorPowerPin, HIGH);
+
+  sensorOnTime = millis();
+
+  sensorIsOn = true;
 }
 
 void sensorOff()
 {
-  //Serial.println("Turning sensor off");
+  Serial.println("Turning sensor off");
 
   digitalWrite(sensorPowerPin, LOW);
+
+  sensorIsOn = false;
 }
 
 void setDryReading(int reading)
